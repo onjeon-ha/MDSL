@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -6,6 +7,134 @@
 <title>고객 구매 여정 & 질환별 분석 대시보드</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<!-- ✅ Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // 🔴 여기에 본인의 Firebase 설정값을 붙여넣으세요
+  // Firebase 콘솔 → 프로젝트 설정 → 내 앱 → firebaseConfig 복사
+const firebaseConfig = {
+  apiKey: "AIzaSyCgFAv_ADxbDOO1aaMN-wFNjz1zb38DrtM",
+  authDomain: "crm-dashboard-d32f2.firebaseapp.com",
+  projectId: "crm-dashboard-d32f2",
+  storageBucket: "crm-dashboard-d32f2.firebasestorage.app",
+  messagingSenderId: "890719555192",
+  appId: "1:890719555192:web:c48628ab433f8d8510678d"
+};
+
+  // Firebase & Firestore 초기화
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // ── 로딩 상태 표시 함수 ──
+  function showLoading() {
+    document.querySelectorAll('.kpi-value').forEach(el => {
+      el.style.opacity = '0.4';
+    });
+  }
+  function hideLoading() {
+    document.querySelectorAll('.kpi-value').forEach(el => {
+      el.style.opacity = '1';
+      el.style.transition = 'opacity 0.5s ease';
+    });
+  }
+
+  // ── KPI 데이터 불러오기 (kpi 컬렉션) ──
+  // Firestore 구조 예시:
+  // kpi 컬렉션 > summary 문서 > { totalMembers, newCustomers, repeatCustomers, avgPurchaseCount, churnRisk, avgInterval }
+  async function loadKPI() {
+    try {
+      const docSnap = await getDocs(collection(db, "kpi"));
+      docSnap.forEach((d) => {
+        const data = d.data();
+        if (d.id === "summary") {
+          if (data.totalMembers)      document.querySelector('.kpi-card.blue .kpi-value').textContent = data.totalMembers.toLocaleString();
+          if (data.newCustomers)      document.querySelector('.kpi-card.teal .kpi-value').textContent = data.newCustomers.toLocaleString();
+          if (data.repeatCustomers)   document.querySelector('.kpi-card.amber .kpi-value').textContent = data.repeatCustomers.toLocaleString();
+          if (data.avgPurchaseCount)  document.querySelector('.kpi-card.purple .kpi-value').textContent = data.avgPurchaseCount + '회';
+          if (data.churnRisk)         document.querySelector('.kpi-card.rose .kpi-value').textContent = data.churnRisk.toLocaleString();
+          if (data.avgInterval)       document.querySelector('.kpi-card.gray .kpi-value').textContent = data.avgInterval + '일';
+        }
+      });
+      console.log('✅ KPI 데이터 로드 완료');
+    } catch (e) {
+      console.warn('⚠️ KPI 로드 실패 (샘플 데이터 유지):', e.message);
+    }
+  }
+
+  // ── 질환별 데이터 불러오기 (diseases 컬렉션) ──
+  // Firestore 구조 예시:
+  // diseases 컬렉션 > 각 문서 > { name, color, customers, avgInterval, modeInterval, risk }
+  async function loadDiseases() {
+    try {
+      const snapshot = await getDocs(collection(db, "diseases"));
+      if (snapshot.empty) {
+        console.warn('⚠️ diseases 컬렉션 없음 - 샘플 데이터 유지');
+        return;
+      }
+      const firebaseDiseases = [];
+      snapshot.forEach(d => firebaseDiseases.push({ id: d.id, ...d.data() }));
+      // 전역 diseases 배열 교체
+      window.firebaseDiseases = firebaseDiseases;
+      console.log('✅ 질환 데이터 로드 완료:', firebaseDiseases.length + '개');
+    } catch (e) {
+      console.warn('⚠️ 질환 데이터 로드 실패 (샘플 데이터 유지):', e.message);
+    }
+  }
+
+  // ── 세그먼트 데이터 실시간 감지 (onSnapshot) ──
+  // Firestore 구조 예시:
+  // segments 컬렉션 > summary 문서 > { new, growth, repeat, loyal, churn }
+  function listenSegments() {
+    try {
+      onSnapshot(doc(db, "segments", "summary"), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const pills = document.querySelectorAll('.seg-val');
+        if (data.new)    pills[0].textContent = data.new.toLocaleString();
+        if (data.growth) pills[1].textContent = data.growth.toLocaleString();
+        if (data.repeat) pills[2].textContent = data.repeat.toLocaleString();
+        if (data.loyal)  pills[3].textContent = data.loyal.toLocaleString();
+        if (data.churn)  pills[4].textContent = data.churn.toLocaleString();
+        console.log('🔄 세그먼트 실시간 업데이트');
+      });
+    } catch (e) {
+      console.warn('⚠️ 세그먼트 실시간 연결 실패:', e.message);
+    }
+  }
+
+  // ── 새로고침 버튼에 Firebase 연동 ──
+  document.querySelector('.refresh-btn').addEventListener('click', async () => {
+    showLoading();
+    await loadKPI();
+    await loadDiseases();
+    hideLoading();
+    // 날짜 업데이트
+    const now = new Date();
+    document.querySelector('.date-badge').textContent =
+      `기준: ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')} / Firebase 연동`;
+  });
+
+  // ── 페이지 로드 시 자동 실행 ──
+  window.addEventListener('DOMContentLoaded', async () => {
+    showLoading();
+    await loadKPI();
+    await loadDiseases();
+    listenSegments();
+    hideLoading();
+  });
+
+  // Firebase 인스턴스 전역 노출 (콘솔 디버깅용)
+  window._db = db;
+  window._collection = collection;
+  window._getDocs = getDocs;
+  window._setDoc = setDoc;
+  window._doc = doc;
+
+  console.log('🔥 Firebase 초기화 완료 - db 객체: window._db');
+</script>
 <style>
   :root {
     --bg: #0d1117;
