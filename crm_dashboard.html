@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>고객 구매 여정 & 질환별 분석 대시보드</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2330;
+    --border: #21282f;
+    --border2: #2d3748;
+    --blue: #2f81f7;
+    --blue-dim: #1a4a8a;
+    --teal: #39d353;
+    --teal-dim: #1a5c2e;
+    --amber: #f0b429;
+    --amber-dim: #6b4d10;
+    --rose: #f85149;
+    --rose-dim: #6b1a17;
+    --purple: #bc8cff;
+    --purple-dim: #4a2d7a;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #484f58;
+    --accent-line: #2f81f7;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    font-size: 13px;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .logo {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: -0.3px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .logo::before {
+    content: '';
+    width: 8px; height: 8px;
+    background: var(--blue);
+    border-radius: 2px;
+    display: block;
+  }
+  .page-title { font-size: 13px; color: var(--text-secondary); font-weight: 400; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .date-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    padding: 4px 10px;
+    border-radius: 4px;
+  }
+  .refresh-btn {
+    font-size: 11px; color: var(--blue);
+    background: rgba(47,129,247,0.1);
+    border: 1px solid rgba(47,129,247,0.3);
+    padding: 4px 10px; border-radius: 4px; cursor: pointer;
+  }
+
+  /* ── Layout ── */
+  .main { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── KPI Row ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi-card:hover { border-color: var(--border2); }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .kpi-card.blue::before { background: var(--blue); }
+  .kpi-card.teal::before { background: var(--teal); }
+  .kpi-card.amber::before { background: var(--amber); }
+  .kpi-card.rose::before { background: var(--rose); }
+  .kpi-card.purple::before { background: var(--purple); }
+  .kpi-card.gray::before { background: var(--text-secondary); }
+  .kpi-label { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500; }
+  .kpi-value { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; color: var(--text-primary); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+  .kpi-badge {
+    display: inline-block; font-size: 10px; padding: 2px 6px;
+    border-radius: 3px; font-weight: 600; margin-top: 4px;
+  }
+  .badge-up { background: rgba(57,211,83,0.15); color: var(--teal); }
+  .badge-down { background: rgba(248,81,73,0.15); color: var(--rose); }
+
+  /* ── Section Header ── */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+  .section-sub { font-size: 11px; color: var(--text-muted); }
+  .tab-group { display: flex; gap: 2px; }
+  .tab {
+    font-size: 11px; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    color: var(--text-secondary); border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .tab.active { background: rgba(47,129,247,0.15); color: var(--blue); border-color: rgba(47,129,247,0.3); }
+
+  /* ── Grid Layouts ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-3-2 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .panel-sm { padding: 14px 16px; }
+
+  /* ── Journey Section ── */
+  .journey-wrapper { display: flex; flex-direction: column; gap: 10px; }
+  .journey-stage {
+    display: grid;
+    grid-template-columns: 90px 1fr 80px;
+    align-items: center;
+    gap: 12px;
+  }
+  .stage-label { font-size: 11px; color: var(--text-secondary); text-align: right; }
+  .stage-bar-wrap {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2);
+    border-radius: 4px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .stage-bar-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    border-radius: 4px;
+    opacity: 0.15;
+    transition: width 1s ease;
+  }
+  .stage-name {
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    position: relative; z-index: 1;
+    min-width: 70px;
+  }
+  .stage-detail {
+    font-size: 11px; color: var(--text-secondary);
+    position: relative; z-index: 1;
+  }
+  .stage-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px; font-weight: 500; text-align: right;
+  }
+  .funnel-arrow {
+    text-align: center; color: var(--text-muted); font-size: 10px; margin: -4px 0;
+    padding-left: 90px;
+  }
+
+  /* ── N차 Purchase Grid ── */
+  .nth-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+  }
+  .nth-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 8px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .nth-card::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 0 0 6px 6px;
+  }
+  .nth-n { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+  .nth-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 16px; font-weight: 500;
+  }
+  .nth-rate { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+  .nth-interval { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── Disease Table ── */
+  .disease-table { width: 100%; border-collapse: collapse; }
+  .disease-table th {
+    font-size: 10px; font-weight: 600; color: var(--text-muted);
+    text-align: left; padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .disease-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    vertical-align: middle;
+  }
+  .disease-table tr:last-child td { border-bottom: none; }
+  .disease-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .disease-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 500;
+    padding: 2px 8px; border-radius: 3px;
+  }
+  .interval-bar {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .interval-track {
+    flex: 1; height: 5px; background: var(--surface2);
+    border-radius: 3px; overflow: hidden;
+  }
+  .interval-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 1s ease;
+  }
+
+  /* ── Heatmap ── */
+  .heatmap-row { display: flex; gap: 4px; margin-bottom: 4px; align-items: center; }
+  .heatmap-label { font-size: 10px; color: var(--text-secondary); width: 60px; text-align: right; }
+  .heatmap-cell {
+    width: 32px; height: 24px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-family: 'DM Mono', monospace;
+    font-weight: 500; cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .heatmap-cell:hover { transform: scale(1.1); }
+  .heatmap-header { display: flex; gap: 4px; padding-left: 64px; margin-bottom: 6px; }
+  .heatmap-col-label { width: 32px; text-align: center; font-size: 9px; color: var(--text-muted); }
+
+  /* ── Segment Pills ── */
+  .segment-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .seg-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    flex: 1; min-width: 120px;
+  }
+  .seg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .seg-name { font-size: 12px; font-weight: 500; }
+  .seg-val { font-family: 'DM Mono', monospace; font-size: 14px; margin-left: auto; }
+
+  /* ── Scroll ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  canvas { max-height: 220px !important; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">CRM Analytics</div>
+    <span class="page-title">고객 구매 여정 & 질환별 구매 간격 분석 대시보드</span>
+  </div>
+  <div class="topbar-right">
+    <span class="date-badge">기준: 2025.03 / 4개 파일 통합</span>
+    <button class="refresh-btn">↻ 새로고침</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi-card blue">
+      <div class="kpi-label">전체 회원 수</div>
+      <div class="kpi-value">48,291</div>
+      <div class="kpi-badge badge-up">▲ 12.4%</div>
+    </div>
+    <div class="kpi-card teal">
+      <div class="kpi-label">신규 고객 (1회 구매)</div>
+      <div class="kpi-value">18,440</div>
+      <div class="kpi-badge badge-up">▲ 8.1%</div>
+    </div>
+    <div class="kpi-card amber">
+      <div class="kpi-label">재구매 고객</div>
+      <div class="kpi-value">29,851</div>
+      <div class="kpi-sub">전환율 61.8%</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">평균 구매 횟수</div>
+      <div class="kpi-value">3.24회</div>
+      <div class="kpi-badge badge-up">▲ 0.3</div>
+    </div>
+    <div class="kpi-card rose">
+      <div class="kpi-label">이탈 위험 고객</div>
+      <div class="kpi-value">6,130</div>
+      <div class="kpi-badge badge-down">▼ 90일↑ 미구매</div>
+    </div>
+    <div class="kpi-card gray">
+      <div class="kpi-label">평균 구매 간격</div>
+      <div class="kpi-value">38일</div>
+      <div class="kpi-sub">질환별 최대 편차 ±22일</div>
+    </div>
+  </div>
+
+  <!-- Row 2: Journey Funnel + N차 구매 -->
+  <div class="grid-3-2">
+
+    <!-- 고객 터치 여정 -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="dot" style="background:var(--blue)"></span>
+          고객 터치 여정 (신규 → 재구매 전환 퍼널)
+        </div>
+        <div class="tab-group">
+          <div class="tab active">전체</div>
+          <div class="tab">질환별</div>
+          <div class="tab">채널별</div>
+        </div>
+      </div>
+      <div class="journey-wrapper">
+        <div class="journey-stage">
+          <span class="stage-label">유입</span>
+          <div class="stage-bar-wrap">
+            <div class="stage-bar-fill" style="background:var(--blue);width:100%"></div>
+            <span class="stage-name" style="color:var(--blue)">신규 유입</span>
+            <span class="stage-detail">광고·검색·추천 유입 후 첫 방문</span>
+          </div>
+          <span class="stage-count" style="color:var(--blue)">48,291</span>
+        </div>
+        <div class="funnel-arrow">▼ 전환율 81.3%</div>
+        <div class="journey-stage">
+          <span class="stage-label">첫 구매</span>
+          <div class="stage-bar-wrap">
+            <div class="stage-bar-fill" style="background:var(--teal);width:81%"></div>
+            <span class="stage-name" style="color:var(--teal)">1차 구매</span>
+            <span class="stage-detail">평균 방문 후 2.3일 이내 전환</span>
+          </div>
+          <span class="stage-count" style="color:var(--teal)">39,260</span>
+        </div>
+        <div class="funnel-arrow">▼ 재구매 전환 61.8%</div>
+        <div class="journey-stage">
+          <span class="stage-label">2차 구매</span>
+          <div class="stage-bar-wrap">
+            <div class="stage-bar-fill" style="background:var(--amber);width:62%"></div>
+            <span class="stage-name" style="color:var(--amber)">재구매</span>
+            <span class="stage-detail">평균 1차 후 38일 경과</span>
+          </div>
+          <span class="stage-count" style="color:var(--amber)">24,260</span>
+        </div>
+        <div class="funnel-arrow">▼ 지속 구매율 44.2%</div>
+        <div class="journey-stage">
+          <span class="stage-label">3~5차</span>
+          <div class="stage-bar-wrap">
+            <div class="stage-bar-fill" style="background:var(--purple);width:44%"></div>
+            <span class="stage-name" style="color:var(--purple)">반복 구매</span>
+            <span class="stage-detail">정기 구매 패턴 형성 구간</span>
+          </div>
+          <span class="stage-count" style="color:var(--purple)">17,340</span>
+        </div>
+        <div class="funnel-arrow">▼ 고정 고객 전환 22.1%</div>
+        <div class="journey-stage">
+          <span class="stage-label">6차↑</span>
+          <div class="stage-bar-wrap">
+            <div class="stage-bar-fill" style="background:var(--rose);width:22%"></div>
+            <span class="stage-name" style="color:var(--rose)">충성 고객</span>
+            <span class="stage-detail">평균 구매 횟수 9.2회 / LTV 최상위</span>
+          </div>
+          <span class="stage-count" style="color:var(--rose)">10,680</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- N차별 구매 분포 -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="dot" style="background:var(--amber)"></span>
+          N차별 구매 고객 수 & 평균 간격
+        </div>
+      </div>
+      <div class="nth-grid">
+        <div class="nth-card" style="--c:var(--teal)">
+          <div class="nth-card" style="position:absolute;inset:0;background:rgba(57,211,83,0.08);border:none;border-radius:6px"></div>
+          <div class="nth-n">1차</div>
+          <div class="nth-val" style="color:var(--teal)">39.3K</div>
+          <div class="nth-rate">100%</div>
+          <div class="nth-interval">기준일</div>
+        </div>
+        <div class="nth-card">
+          <div class="nth-n">2차</div>
+          <div class="nth-val" style="color:var(--blue)">24.3K</div>
+          <div class="nth-rate">61.8%</div>
+          <div class="nth-interval">avg 38일</div>
+        </div>
+        <div class="nth-card">
+          <div class="nth-n">3차</div>
+          <div class="nth-val" style="color:var(--blue)">17.3K</div>
+          <div class="nth-rate">44.2%</div>
+          <div class="nth-interval">avg 35일</div>
+        </div>
+        <div class="nth-card">
+          <div class="nth-n">4차</div>
+          <div class="nth-val" style="color:var(--purple)">13.1K</div>
+          <div class="nth-rate">33.3%</div>
+          <div class="nth-interval">avg 32일</div>
+        </div>
+        <div class="nth-card">
+          <div class="nth-n">5차</div>
+          <div class="nth-val" style="color:var(--purple)">10.7K</div>
+          <div class="nth-rate">27.2%</div>
+          <div class="nth-interval">avg 30일</div>
+        </div>
+        <div class="nth-card">
+          <div class="nth-n">6차</div>
+          <div class="nth-val" style="color:var(--amber)">8.2K</div>
+          <div class="nth-rate">20.9%</div>
+          <div class="nth-interval">avg 29일</div>
+        </div>
+        <div class="nth-card">
+          <div class="nth-n">7차↑</div>
+          <div class="nth-val" style="color:var(--rose)">5.1K</div>
+          <div class="nth-rate">13.0%</div>
+          <div class="nth-interval">avg 27일</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <canvas id="nthChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: 질환별 구매 간격 분석 -->
+  <div class="grid-2">
+
+    <!-- 질환별 테이블 -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="dot" style="background:var(--rose)"></span>
+          질환별 구매 간격 분포 분석
+        </div>
+        <div class="section-sub">단위: 일(day)</div>
+      </div>
+      <table class="disease-table">
+        <thead>
+          <tr>
+            <th>질환/증상</th>
+            <th>고객 수</th>
+            <th>평균 간격</th>
+            <th>최빈 간격</th>
+            <th>간격 분포</th>
+            <th>이탈위험</th>
+          </tr>
+        </thead>
+        <tbody id="diseaseTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- 질환별 차트 -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="dot" style="background:var(--purple)"></span>
+          질환별 재구매 간격 박스플롯
+        </div>
+        <div class="tab-group">
+          <div class="tab active">간격 분포</div>
+          <div class="tab">N차별</div>
+        </div>
+      </div>
+      <canvas id="diseaseChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Row 4: 구매 요일/월 히트맵 + 세그먼트 -->
+  <div class="grid-2-1">
+
+    <!-- 히트맵 -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="dot" style="background:var(--teal)"></span>
+          구매 시점 히트맵 (질환 × 재구매 N차)
+        </div>
+        <div class="section-sub">셀 값: 평균 구매 간격(일)</div>
+      </div>
+      <div id="heatmapWrap"></div>
+    </div>
+
+    <!-- 고객 세그먼트 -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="dot" style="background:var(--amber)"></span>
+          고객 세그먼트 분류
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div class="seg-pill">
+          <div class="seg-dot" style="background:var(--teal)"></div>
+          <div>
+            <div class="seg-name">신규 (1회)</div>
+            <div style="font-size:10px;color:var(--text-muted)">첫 구매 완료</div>
+          </div>
+          <div class="seg-val" style="color:var(--teal)">18,440</div>
+        </div>
+        <div class="seg-pill">
+          <div class="seg-dot" style="background:var(--blue)"></div>
+          <div>
+            <div class="seg-name">성장 (2~3회)</div>
+            <div style="font-size:10px;color:var(--text-muted)">재구매 전환 완료</div>
+          </div>
+          <div class="seg-val" style="color:var(--blue)">13,490</div>
+        </div>
+        <div class="seg-pill">
+          <div class="seg-dot" style="background:var(--purple)"></div>
+          <div>
+            <div class="seg-name">반복 (4~5회)</div>
+            <div style="font-size:10px;color:var(--text-muted)">정기 패턴 형성</div>
+          </div>
+          <div class="seg-val" style="color:var(--purple)">9,810</div>
+        </div>
+        <div class="seg-pill">
+          <div class="seg-dot" style="background:var(--amber)"></div>
+          <div>
+            <div class="seg-name">충성 (6회↑)</div>
+            <div style="font-size:10px;color:var(--text-muted)">고LTV 핵심 고객</div>
+          </div>
+          <div class="seg-val" style="color:var(--amber)">10,680</div>
+        </div>
+        <div class="seg-pill">
+          <div class="seg-dot" style="background:var(--rose)"></div>
+          <div>
+            <div class="seg-name">이탈 위험</div>
+            <div style="font-size:10px;color:var(--text-muted)">90일↑ 미구매</div>
+          </div>
+          <div class="seg-val" style="color:var(--rose)">6,130</div>
+        </div>
+        <div style="margin-top:8px; padding-top:12px; border-top:1px solid var(--border)">
+          <canvas id="segChart" style="max-height:130px!important"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── 데이터 ──
+const diseases = [
+  { name: '혈당/당뇨',  color: '#f85149', customers: 9820, avgInterval: 28, modeInterval: 30, risk: 'HIGH' },
+  { name: '혈압/혈관',  color: '#f0b429', customers: 8410, avgInterval: 32, modeInterval: 30, risk: 'MED' },
+  { name: '관절/근골격', color: '#bc8cff', customers: 7650, avgInterval: 42, modeInterval: 45, risk: 'MED' },
+  { name: '소화/장',    color: '#39d353', customers: 6980, avgInterval: 35, modeInterval: 30, risk: 'LOW' },
+  { name: '면역/피로',  color: '#2f81f7', customers: 5830, avgInterval: 38, modeInterval: 30, risk: 'MED' },
+  { name: '뇌/인지',   color: '#79c0ff', customers: 4210, avgInterval: 55, modeInterval: 60, risk: 'HIGH' },
+  { name: '피부/미용', color: '#ffa657', customers: 5391, avgInterval: 25, modeInterval: 21, risk: 'LOW' },
+];
+
+// Disease Table
+const tbody = document.getElementById('diseaseTableBody');
+const maxI = Math.max(...diseases.map(d => d.avgInterval));
+diseases.forEach(d => {
+  const riskColor = d.risk === 'HIGH' ? 'var(--rose)' : d.risk === 'MED' ? 'var(--amber)' : 'var(--teal)';
+  tbody.innerHTML += `
+    <tr>
+      <td><span class="disease-badge" style="background:${d.color}22;color:${d.color}">${d.name}</span></td>
+      <td style="font-family:'DM Mono',monospace">${d.customers.toLocaleString()}</td>
+      <td style="font-family:'DM Mono',monospace;color:${d.color}">${d.avgInterval}일</td>
+      <td style="font-family:'DM Mono',monospace">${d.modeInterval}일</td>
+      <td>
+        <div class="interval-bar">
+          <div class="interval-track">
+            <div class="interval-fill" style="width:${(d.avgInterval/maxI)*100}%;background:${d.color}"></div>
+          </div>
+          <span style="font-size:10px;color:var(--text-muted);min-width:28px">${d.avgInterval}d</span>
+        </div>
+      </td>
+      <td><span style="font-size:10px;color:${riskColor};font-weight:600">${d.risk}</span></td>
+    </tr>`;
+});
+
+// N차 Chart
+const nthCtx = document.getElementById('nthChart').getContext('2d');
+new Chart(nthCtx, {
+  type: 'bar',
+  data: {
+    labels: ['1차','2차','3차','4차','5차','6차','7차↑'],
+    datasets: [{
+      label: '고객 수',
+      data: [39260, 24260, 17340, 13100, 10680, 8200, 5100],
+      backgroundColor: ['#39d35388','#2f81f788','#2f81f788','#bc8cff88','#bc8cff88','#f0b42988','#f8514988'],
+      borderColor: ['#39d353','#2f81f7','#2f81f7','#bc8cff','#bc8cff','#f0b429','#f85149'],
+      borderWidth: 1, borderRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21282f' } },
+      y: { ticks: { color: '#8b949e', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#21282f' } }
+    }
+  }
+});
+
+// Disease Interval Chart (horizontal bar = box-like)
+const diseaseCtx = document.getElementById('diseaseChart').getContext('2d');
+new Chart(diseaseCtx, {
+  type: 'bar',
+  data: {
+    labels: diseases.map(d => d.name),
+    datasets: [
+      {
+        label: '평균 간격(일)',
+        data: diseases.map(d => d.avgInterval),
+        backgroundColor: diseases.map(d => d.color + '99'),
+        borderColor: diseases.map(d => d.color),
+        borderWidth: 1, borderRadius: 4,
+      },
+      {
+        label: '최빈 간격(일)',
+        data: diseases.map(d => d.modeInterval),
+        backgroundColor: 'transparent',
+        borderColor: diseases.map(d => d.color),
+        borderWidth: 2, borderDash: [4,4], type: 'line',
+        pointBackgroundColor: diseases.map(d => d.color),
+        pointRadius: 4, tension: 0.3,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: '#8b949e', font: { size: 10 } } } },
+    scales: {
+      x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21282f' } },
+      y: { ticks: { color: '#8b949e', font: { size: 10 }, callback: v => v+'일' }, grid: { color: '#21282f' } }
+    }
+  }
+});
+
+// Heatmap
+const heatmapWrap = document.getElementById('heatmapWrap');
+const diseaseShort = ['혈당', '혈압', '관절', '소화', '면역', '뇌인지', '피부'];
+const nthLabels = ['2차','3차','4차','5차','6차','7차↑'];
+const heatData = [
+  [30,27,26,25,24,23],
+  [34,32,30,28,27,26],
+  [45,43,40,38,36,33],
+  [36,34,32,30,29,28],
+  [40,38,35,33,31,29],
+  [58,55,52,50,48,45],
+  [26,24,22,21,20,19],
+];
+const allVals = heatData.flat();
+const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+let html = '<div class="heatmap-header">';
+nthLabels.forEach(l => html += `<div class="heatmap-col-label">${l}</div>`);
+html += '</div>';
+
+heatData.forEach((row, ri) => {
+  html += `<div class="heatmap-row"><span class="heatmap-label">${diseaseShort[ri]}</span>`;
+  row.forEach(v => {
+    const t = (v - minV) / (maxV - minV);
+    const r = Math.round(lerp(39, 248, t));
+    const g = Math.round(lerp(211, 81, t));
+    const b = Math.round(lerp(83, 73, t));
+    const bg = `rgb(${r},${g},${b})`;
+    const textC = t > 0.5 ? '#fff' : '#0d1117';
+    html += `<div class="heatmap-cell" style="background:${bg};color:${textC}" title="${v}일">${v}</div>`;
+  });
+  html += '</div>';
+});
+heatmapWrap.innerHTML = html;
+
+// Segment Donut
+const segCtx = document.getElementById('segChart').getContext('2d');
+new Chart(segCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['신규','성장','반복','충성','이탈위험'],
+    datasets: [{
+      data: [18440, 13490, 9810, 10680, 6130],
+      backgroundColor: ['#39d35388','#2f81f788','#bc8cff88','#f0b42988','#f8514988'],
+      borderColor: ['#39d353','#2f81f7','#bc8cff','#f0b429','#f85149'],
+      borderWidth: 1,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    cutout: '60%',
+    plugins: { legend: { position: 'right', labels: { color: '#8b949e', font: { size: 10 }, boxWidth: 10 } } }
+  }
+});
+</script>
+</body>
+</html>
