@@ -7,134 +7,6 @@
 <title>고객 구매 여정 & 질환별 분석 대시보드</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-
-<!-- ✅ Firebase SDK -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-  // 🔴 여기에 본인의 Firebase 설정값을 붙여넣으세요
-  // Firebase 콘솔 → 프로젝트 설정 → 내 앱 → firebaseConfig 복사
-const firebaseConfig = {
-  apiKey: "AIzaSyCgFAv_ADxbDOO1aaMN-wFNjz1zb38DrtM",
-  authDomain: "crm-dashboard-d32f2.firebaseapp.com",
-  projectId: "crm-dashboard-d32f2",
-  storageBucket: "crm-dashboard-d32f2.firebasestorage.app",
-  messagingSenderId: "890719555192",
-  appId: "1:890719555192:web:c48628ab433f8d8510678d"
-};
-
-  // Firebase & Firestore 초기화
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  // ── 로딩 상태 표시 함수 ──
-  function showLoading() {
-    document.querySelectorAll('.kpi-value').forEach(el => {
-      el.style.opacity = '0.4';
-    });
-  }
-  function hideLoading() {
-    document.querySelectorAll('.kpi-value').forEach(el => {
-      el.style.opacity = '1';
-      el.style.transition = 'opacity 0.5s ease';
-    });
-  }
-
-  // ── KPI 데이터 불러오기 (kpi 컬렉션) ──
-  // Firestore 구조 예시:
-  // kpi 컬렉션 > summary 문서 > { totalMembers, newCustomers, repeatCustomers, avgPurchaseCount, churnRisk, avgInterval }
-  async function loadKPI() {
-    try {
-      const docSnap = await getDocs(collection(db, "kpi"));
-      docSnap.forEach((d) => {
-        const data = d.data();
-        if (d.id === "summary") {
-          if (data.totalMembers)      document.querySelector('.kpi-card.blue .kpi-value').textContent = data.totalMembers.toLocaleString();
-          if (data.newCustomers)      document.querySelector('.kpi-card.teal .kpi-value').textContent = data.newCustomers.toLocaleString();
-          if (data.repeatCustomers)   document.querySelector('.kpi-card.amber .kpi-value').textContent = data.repeatCustomers.toLocaleString();
-          if (data.avgPurchaseCount)  document.querySelector('.kpi-card.purple .kpi-value').textContent = data.avgPurchaseCount + '회';
-          if (data.churnRisk)         document.querySelector('.kpi-card.rose .kpi-value').textContent = data.churnRisk.toLocaleString();
-          if (data.avgInterval)       document.querySelector('.kpi-card.gray .kpi-value').textContent = data.avgInterval + '일';
-        }
-      });
-      console.log('✅ KPI 데이터 로드 완료');
-    } catch (e) {
-      console.warn('⚠️ KPI 로드 실패 (샘플 데이터 유지):', e.message);
-    }
-  }
-
-  // ── 질환별 데이터 불러오기 (diseases 컬렉션) ──
-  // Firestore 구조 예시:
-  // diseases 컬렉션 > 각 문서 > { name, color, customers, avgInterval, modeInterval, risk }
-  async function loadDiseases() {
-    try {
-      const snapshot = await getDocs(collection(db, "diseases"));
-      if (snapshot.empty) {
-        console.warn('⚠️ diseases 컬렉션 없음 - 샘플 데이터 유지');
-        return;
-      }
-      const firebaseDiseases = [];
-      snapshot.forEach(d => firebaseDiseases.push({ id: d.id, ...d.data() }));
-      // 전역 diseases 배열 교체
-      window.firebaseDiseases = firebaseDiseases;
-      console.log('✅ 질환 데이터 로드 완료:', firebaseDiseases.length + '개');
-    } catch (e) {
-      console.warn('⚠️ 질환 데이터 로드 실패 (샘플 데이터 유지):', e.message);
-    }
-  }
-
-  // ── 세그먼트 데이터 실시간 감지 (onSnapshot) ──
-  // Firestore 구조 예시:
-  // segments 컬렉션 > summary 문서 > { new, growth, repeat, loyal, churn }
-  function listenSegments() {
-    try {
-      onSnapshot(doc(db, "segments", "summary"), (snap) => {
-        if (!snap.exists()) return;
-        const data = snap.data();
-        const pills = document.querySelectorAll('.seg-val');
-        if (data.new)    pills[0].textContent = data.new.toLocaleString();
-        if (data.growth) pills[1].textContent = data.growth.toLocaleString();
-        if (data.repeat) pills[2].textContent = data.repeat.toLocaleString();
-        if (data.loyal)  pills[3].textContent = data.loyal.toLocaleString();
-        if (data.churn)  pills[4].textContent = data.churn.toLocaleString();
-        console.log('🔄 세그먼트 실시간 업데이트');
-      });
-    } catch (e) {
-      console.warn('⚠️ 세그먼트 실시간 연결 실패:', e.message);
-    }
-  }
-
-  // ── 새로고침 버튼에 Firebase 연동 ──
-  document.querySelector('.refresh-btn').addEventListener('click', async () => {
-    showLoading();
-    await loadKPI();
-    await loadDiseases();
-    hideLoading();
-    // 날짜 업데이트
-    const now = new Date();
-    document.querySelector('.date-badge').textContent =
-      `기준: ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')} / Firebase 연동`;
-  });
-
-  // ── 페이지 로드 시 자동 실행 ──
-  window.addEventListener('DOMContentLoaded', async () => {
-    showLoading();
-    await loadKPI();
-    await loadDiseases();
-    listenSegments();
-    hideLoading();
-  });
-
-  // Firebase 인스턴스 전역 노출 (콘솔 디버깅용)
-  window._db = db;
-  window._collection = collection;
-  window._getDocs = getDocs;
-  window._setDoc = setDoc;
-  window._doc = doc;
-
-  console.log('🔥 Firebase 초기화 완료 - db 객체: window._db');
-</script>
 <style>
   :root {
     --bg: #0d1117;
@@ -422,6 +294,102 @@ const firebaseConfig = {
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 
   canvas { max-height: 220px !important; }
+
+  /* ── Upload Section ── */
+  .upload-zone {
+    border: 2px dashed var(--border2);
+    border-radius: 10px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--blue);
+    background: rgba(47,129,247,0.05);
+  }
+  .upload-icon { font-size: 32px; margin-bottom: 10px; }
+  .upload-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+  .upload-sub { font-size: 12px; color: var(--text-secondary); }
+  .upload-btn {
+    display: inline-block; margin-top: 14px;
+    padding: 8px 20px; border-radius: 6px;
+    background: rgba(47,129,247,0.15); color: var(--blue);
+    border: 1px solid rgba(47,129,247,0.4);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .upload-btn:hover { background: rgba(47,129,247,0.25); }
+  .file-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .file-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+  }
+  .file-icon { font-size: 18px; }
+  .file-name { font-size: 12px; font-weight: 500; flex: 1; }
+  .file-size { font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+  .file-status {
+    font-size: 10px; font-weight: 600; padding: 2px 8px;
+    border-radius: 3px;
+  }
+  .status-ready { background: rgba(57,211,83,0.15); color: var(--teal); }
+  .status-error { background: rgba(248,81,73,0.15); color: var(--rose); }
+  .preview-table-wrap {
+    overflow-x: auto; margin-top: 14px;
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .preview-table { width: 100%; border-collapse: collapse; }
+  .preview-table th {
+    font-size: 10px; font-weight: 600; color: var(--text-muted);
+    background: var(--surface2); padding: 7px 12px;
+    border-bottom: 1px solid var(--border); text-align: left;
+    white-space: nowrap; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .preview-table td {
+    font-size: 11px; padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary); white-space: nowrap;
+    font-family: 'DM Mono', monospace;
+  }
+  .preview-table tr:last-child td { border-bottom: none; }
+  .preview-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .action-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 14px; flex-wrap: wrap; gap: 10px;
+  }
+  .action-info { font-size: 11px; color: var(--text-secondary); }
+  .action-btns { display: flex; gap: 8px; }
+  .btn-download {
+    padding: 7px 16px; border-radius: 6px;
+    background: rgba(57,211,83,0.15); color: var(--teal);
+    border: 1px solid rgba(57,211,83,0.4);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-download:hover { background: rgba(57,211,83,0.25); }
+  .btn-clear {
+    padding: 7px 16px; border-radius: 6px;
+    background: rgba(248,81,73,0.1); color: var(--rose);
+    border: 1px solid rgba(248,81,73,0.3);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-clear:hover { background: rgba(248,81,73,0.2); }
+  .tab-files { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab-file {
+    font-size: 11px; padding: 4px 12px; border-radius: 4px; cursor: pointer;
+    color: var(--text-secondary); border: 1px solid var(--border2);
+    background: var(--surface2); transition: all 0.15s;
+  }
+  .tab-file.active { background: rgba(47,129,247,0.15); color: var(--blue); border-color: rgba(47,129,247,0.3); }
+  .empty-state { text-align: center; padding: 30px; color: var(--text-muted); font-size: 12px; }
+  .col-tag {
+    display: inline-block; font-size: 9px; padding: 1px 5px;
+    border-radius: 2px; margin-left: 4px; vertical-align: middle;
+    background: rgba(47,129,247,0.15); color: var(--blue);
+  }
 </style>
 </head>
 <body>
@@ -717,10 +685,218 @@ const firebaseConfig = {
     </div>
   </div>
 
+  <!-- Row 5: 파일 업로드 & 데이터 정돈 -->
+  <div class="panel">
+    <div class="section-header">
+      <div class="section-title">
+        <span class="dot" style="background:var(--blue)"></span>
+        RAW 데이터 업로드 & 정돈된 ROW 다운로드
+      </div>
+      <div class="section-sub">CSV / Excel(.xlsx) 지원 · 최대 50MB</div>
+    </div>
+
+    <!-- 업로드 존 -->
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">📂</div>
+      <div class="upload-title">파일을 여기로 드래그 앤 드롭</div>
+      <div class="upload-sub">또는 클릭해서 파일 선택 (CSV, XLSX, XLS)</div>
+      <label class="upload-btn" for="fileInput">파일 선택하기</label>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple style="display:none">
+    </div>
+
+    <!-- 업로드된 파일 목록 -->
+    <div id="fileList" class="file-list"></div>
+
+    <!-- 파일 탭 -->
+    <div id="fileTabs" class="tab-files" style="display:none; margin-top:16px;"></div>
+
+    <!-- 미리보기 영역 -->
+    <div id="previewArea">
+      <div class="empty-state">📋 파일을 업로드하면 데이터 미리보기가 여기에 표시됩니다</div>
+    </div>
+  </div>
+
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-// ── 데이터 ──
+// ── 파일 업로드 & 데이터 정돈 ──
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+const fileTabsEl = document.getElementById('fileTabs');
+const previewArea = document.getElementById('previewArea');
+
+let uploadedFiles = {}; // { filename: { headers, rows } }
+let activeFile = null;
+
+// 드래그 앤 드롭
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+uploadZone.addEventListener('click', e => { if (e.target.tagName !== 'LABEL') fileInput.click(); });
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(files) {
+  Array.from(files).forEach(file => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['csv','xlsx','xls'].includes(ext)) return;
+    const reader = new FileReader();
+    if (ext === 'csv') {
+      reader.onload = e => parseCSV(file.name, e.target.result);
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      reader.onload = e => parseExcel(file.name, e.target.result);
+      reader.readAsArrayBuffer(file);
+    }
+    addFileItem(file);
+  });
+}
+
+function addFileItem(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const icon = ext === 'csv' ? '📄' : '📊';
+  const size = (file.size / 1024).toFixed(1) + ' KB';
+  const div = document.createElement('div');
+  div.className = 'file-item';
+  div.id = 'fi_' + file.name;
+  div.innerHTML = `
+    <span class="file-icon">${icon}</span>
+    <span class="file-name">${file.name}</span>
+    <span class="file-size">${size}</span>
+    <span class="file-status status-ready" id="fs_${file.name}">처리중...</span>
+  `;
+  fileListEl.appendChild(div);
+}
+
+function parseCSV(name, text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return;
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+  const rows = lines.slice(1).map(line => {
+    const cols = line.split(',').map(c => c.trim().replace(/"/g,''));
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = cols[i] || '');
+    return obj;
+  }).filter(row => Object.values(row).some(v => v !== ''));
+  storeData(name, headers, rows);
+}
+
+function parseExcel(name, buffer) {
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  if (!data.length) return;
+  const headers = Object.keys(data[0]);
+  storeData(name, headers, data);
+}
+
+function storeData(name, headers, rows) {
+  uploadedFiles[name] = { headers, rows };
+  const fsEl = document.getElementById('fs_' + name);
+  if (fsEl) { fsEl.textContent = rows.length.toLocaleString() + '행 ✓'; fsEl.className = 'file-status status-ready'; }
+  rebuildTabs();
+  if (!activeFile) showPreview(name);
+}
+
+function rebuildTabs() {
+  fileTabsEl.style.display = 'flex';
+  fileTabsEl.innerHTML = '';
+  Object.keys(uploadedFiles).forEach(name => {
+    const tab = document.createElement('div');
+    tab.className = 'tab-file' + (activeFile === name ? ' active' : '');
+    tab.textContent = name.length > 20 ? name.substring(0,18)+'…' : name;
+    tab.title = name;
+    tab.onclick = () => showPreview(name);
+    fileTabsEl.appendChild(tab);
+  });
+}
+
+function showPreview(name) {
+  activeFile = name;
+  rebuildTabs();
+  const { headers, rows } = uploadedFiles[name];
+  const previewRows = rows.slice(0, 50);
+
+  previewArea.innerHTML = `
+    <div class="action-row">
+      <div class="action-info">
+        📋 <strong>${name}</strong> · 전체 <strong>${rows.length.toLocaleString()}행</strong> · 컬럼 <strong>${headers.length}개</strong> · 미리보기 50행
+      </div>
+      <div class="action-btns">
+        <button class="btn-download" onclick="downloadClean('${name}')">⬇ 정돈된 CSV 다운로드</button>
+        <button class="btn-clear" onclick="removeFile('${name}')">✕ 제거</button>
+      </div>
+    </div>
+    <div class="preview-table-wrap">
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            ${headers.map(h => `<th>${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${previewRows.map((row, i) => `
+            <tr>
+              <td style="color:var(--text-muted)">${i+1}</td>
+              ${headers.map(h => `<td>${row[h] ?? ''}</td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${rows.length > 50 ? `<div style="text-align:center;padding:10px;font-size:11px;color:var(--text-muted)">… 외 ${(rows.length-50).toLocaleString()}행 더 있음 (다운로드 시 전체 포함)</div>` : ''}
+  `;
+}
+
+function downloadClean(name) {
+  const { headers, rows } = uploadedFiles[name];
+  // 빈 행 제거 + 앞뒤 공백 정리
+  const cleaned = rows
+    .filter(row => Object.values(row).some(v => String(v).trim() !== ''))
+    .map(row => {
+      const obj = {};
+      headers.forEach(h => { obj[h] = String(row[h] ?? '').trim(); });
+      return obj;
+    });
+
+  let csv = headers.join(',') + '\n';
+  cleaned.forEach(row => {
+    csv += headers.map(h => {
+      const val = row[h];
+      return val.includes(',') || val.includes('"') || val.includes('\n')
+        ? `"${val.replace(/"/g,'""')}"` : val;
+    }).join(',') + '\n';
+  });
+
+  const bom = '\uFEFF'; // UTF-8 BOM (엑셀 한글 깨짐 방지)
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name.replace(/\.[^/.]+$/, '') + '_정돈.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function removeFile(name) {
+  delete uploadedFiles[name];
+  const fiEl = document.getElementById('fi_' + name);
+  if (fiEl) fiEl.remove();
+  if (activeFile === name) {
+    activeFile = null;
+    const remaining = Object.keys(uploadedFiles);
+    if (remaining.length) showPreview(remaining[0]);
+    else previewArea.innerHTML = '<div class="empty-state">📋 파일을 업로드하면 데이터 미리보기가 여기에 표시됩니다</div>';
+  }
+  rebuildTabs();
+  if (!Object.keys(uploadedFiles).length) fileTabsEl.style.display = 'none';
+}
+
 const diseases = [
   { name: '혈당/당뇨',  color: '#f85149', customers: 9820, avgInterval: 28, modeInterval: 30, risk: 'HIGH' },
   { name: '혈압/혈관',  color: '#f0b429', customers: 8410, avgInterval: 32, modeInterval: 30, risk: 'MED' },
